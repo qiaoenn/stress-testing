@@ -1,0 +1,9 @@
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Generated outputs / cached data
+output_prices/
+
+# Mac junk
+.DS_Store
+

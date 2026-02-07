@@ -1,0 +1,5 @@
+symbol,asset_class,exchange,currency,weight 
+SPY,ETF,ARCA,USD,0.4
+TLT,ETF,ARCA,USD,0.3
+GLD,ETF,ARCA,USD,0.1
+EURUSD,FX,IDEALPRO,USD,0.2
