@@ -1,98 +1,111 @@
-# Portfolio Stress Testing Project
+# Stress Testing a Multi-Asset Portfolio Using IBKR Positions
 
 ## Overview
-This project implements a **historical, scenario-based stress testing framework** to evaluate how a multi-asset portfolio would have performed across major financial crises and macroeconomic shock events. The analysis focuses on portfolio-level returns, asset-level contributions, and identification of key loss drivers under different market regimes.
+This project implements a **historical scenario stress-testing framework** for a multi-asset portfolio.  
+Unlike static backtests that rely on predefined weights, the portfolio composition and weights are **pulled dynamically from Interactive Brokers (IBKR)**, ensuring that stress results reflect **actual live positions**.
 
-The framework is designed to be **transparent, reproducible, and analytically defensible**, with explicit handling of historical data availability constraints to avoid look-ahead bias or data fabrication.
-
----
-
-## Files
-- code+result.ipynb: main notebook: data loading, stress testing, analysis
-- portfolio.csv: portfolio weights
-- scenarios.csv: stress windows
-- output_prices: asset prices from IBKR
-
-## Data Inputs
-
-### Portfolio
-- **portfolio.csv**  
-  Contains portfolio asset weights (e.g. SPY, TLT, GLD, EURUSD).
-
-### Stress Scenarios
-- **scenarios.csv**  
-  Defines historical stress scenarios with:
-  - `scenario`: scenario identifier (e.g. afc, dot_com, gfc)
-  - `start_date`
-  - `end_date`
-
-### Market Data
-- Historical price data is sourced from **IBKR** and **Yahoo Finance (yfinance)**.
-- Assets without valid historical data for a given scenario are intentionally excluded (recorded as `NaN`) to ensure methodological integrity.
+The framework evaluates how the portfolio would have performed during major historical market stress events (e.g. COVID-19, Dot-com crash, Global Financial Crisis) by decomposing **asset-level returns** and **portfolio-level contributions**.
 
 ---
 
-## Stress Scenarios Covered
+## Key Features
+- **Dynamic portfolio construction from IBKR**
+  - Pulls open positions directly from IBKR (stocks, ETFs, futures)
+  - Computes **gross portfolio weights** from live position values
+  - No reliance on static `portfolio.csv`
 
-- **afc** – Asian Financial Crisis (1997–1998)
-- **russian_default_ltcm** – Russia’s 1998 default and LTCM collapse
-- **dot_com** – Burst of the technology bubble (2000–2002)
-- **gfc** – Global Financial Crisis (2007–2009)
-- **flash_crash** – May 2010 liquidity-driven market crash
-- **fukushima_meltdown** – 2011 Japan earthquake and nuclear disaster
-- **sp_downgrade** – 2011 US sovereign credit downgrade
-- **euro_debt_crisis** – European sovereign debt stress
-- **taper_tantrum** – 2013 Fed tapering shock
-- **a50_turbulence** – China equity market turbulence (2015–2016)
-- **brexit** – UK referendum to leave the EU
-- **us_presidential_election** – 2016 US election volatility
-- **volmageddon** – February 2018 volatility spike
-- **covid19** – Global pandemic shock
-- **global_inflation** – Post-pandemic inflation and rate hikes
-- **fitch_downgrade** – 2023 US credit downgrade
-- **carry_trade_unwind** – Global FX carry trade unwinding
-- **trump_tariffs** – US–China trade tensions
-- **gold_silver_bust** – Precious metals correction
+- **Robust historical price retrieval**
+  - Pulls daily historical prices using:
+    - IBKR (with chunking to avoid API limits)
+    - Yahoo Finance (`yfinance`) as a fallback / alternative data source
+  - Gracefully handles limited history and asset inception dates
+
+- **Scenario-based stress testing**
+  - Evaluates portfolio performance across predefined historical crises
+  - Avoids look-ahead bias by using the nearest available trading date ≤ scenario bounds
+
+- **Asset-level contribution analysis**
+  - Separates pure asset returns from portfolio impact
+  - Identifies which assets drive losses or gains in each scenario
+
+---
+
+## Project Structure
+- code + results.ipynb # Main notebook: data pull, stress tests, results
+- output_prices # Saved historical price series (CSV per asset)
+- scenarios.csv # Stress scenario definitions (dates + labels)
+
+
+> **Note:** `portfolio.csv` has been intentionally removed.  
+> Portfolio weights are now derived entirely from IBKR positions.
 
 ---
 
 ## Methodology
 
-1. **Scenario Date Alignment**  
-   Scenario start and end dates are aligned to actual trading days using the most recent available price on or before each date, ensuring no look-ahead bias.
-
-2. **Asset-Level Returns**  
-   Asset returns are computed over each scenario window using adjusted closing prices.
-
-3. **Portfolio Contributions**  
-   Portfolio contribution is calculated as: contribution = weight × asset_return
-
-4. **Loss Driver Analysis**  
-For each scenario, the largest negative contributors are identified to determine the primary sources of portfolio losses.
-
-5. **Data Availability Handling**  
-For early historical scenarios (e.g. AFC, Russian Default & LTCM, Dot-com), only assets with available data are included. As a result, these scenarios may be driven solely by equity exposure (e.g. SPY), leading to more pronounced portfolio movements.
+### 1. Portfolio Construction
+- Open positions are retrieved from IBKR using `ib_insync`
+- Each position’s **signed market value** is computed:
+position_value = quantity × price × multiplier
+- **Gross weights** are calculated as:
+weight = position_value / sum(|position_value|)
+- Positions without valid prices are excluded from analysis
 
 ---
 
-## Key Outputs
-
-- Scenario-level portfolio returns
-- Asset-level returns and contributions
-- Ranking of stress scenarios by severity
-- Identification of main loss drivers per scenario
-- Comparative analysis of equity-driven vs macro-driven stress regimes
+### 2. Historical Price Data
+- Daily price history is pulled for each asset:
+- Chunked requests (1 year per request) to avoid IBKR limits
+- Missing or unavailable history (e.g. pre-IPO periods) is handled gracefully
+- Assets are saved individually under `output_prices/`
 
 ---
 
-## How to Run
+### 3. Stress Scenarios
+Each scenario specifies:
+- A historical event (e.g. `covid19`, `dot_com`, `gfc`)
+- A start and end date defining the stress window
 
-### Using pip
-```bash
-pip install -r requirements.txt
-```
+Asset returns are computed as:
+(Price at end of scenario / Price at start of scenario) − 1
 
-## Notes & Limitations
+The nearest trading day ≤ each date is used to avoid look-ahead bias.
 
-Results for early-period scenarios may appear more extreme due to limited asset availability and reduced diversification.
-This project is intended for analytical and educational purposes only and does not constitute investment advice.
+---
+
+### 4. Portfolio Impact
+- **Asset return**: price movement over the scenario window
+- **Contribution**:
+contribution = weight × asset_return
+
+- Portfolio-level stress return is the sum of contributions across assets
+
+---
+
+## Interpreting Results
+- Negative portfolio returns indicate stress vulnerability
+- Scenario severity is ranked by portfolio return
+- Asset-level contributions identify **which exposures drive risk**
+- In this portfolio, downside risk is largely driven by **equity beta**, particularly S&P 500 futures exposure
+
+---
+
+## Known Limitations
+- Historical coverage varies by asset and exchange
+- Some futures contracts only provide history for the active contract month
+- Yahoo Finance coverage for non-US assets (e.g. SGX) may be incomplete
+
+These limitations are handled explicitly and do not invalidate the stress-testing framework.
+
+---
+
+## Future Extensions
+- Net-weight and capital-based stress testing
+- Factor-level decomposition (equity beta, rates, FX)
+- Automated scenario expansion and visualization dashboards
+- Rolling stress tests using current portfolio snapshots
+
+---
+
+## Disclaimer
+This project is for **educational and research purposes only** and does not constitute investment advice.
