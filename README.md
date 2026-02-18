@@ -1,111 +1,104 @@
-# Stress Testing a Multi-Asset Portfolio Using IBKR Positions
+# Portfolio Tail-Risk Stress Test 
 
-## Overview
-This project implements a **historical scenario stress-testing framework** for a multi-asset portfolio.  
-Unlike static backtests that rely on predefined weights, the portfolio composition and weights are **pulled dynamically from Interactive Brokers (IBKR)**, ensuring that stress results reflect **actual live positions**.
+A Streamlit dashboard that pulls **live IBKR positions (local API)** and applies historical crisis shock scenarios to estimate portfolio performance under major tail events.
 
-The framework evaluates how the portfolio would have performed during major historical market stress events (e.g. COVID-19, Dot-com crash, Global Financial Crisis) by decomposing **asset-level returns** and **portfolio-level contributions**.
+This tool answers:
 
----
-
-## Key Features
-- **Dynamic portfolio construction from IBKR**
-  - Pulls open positions directly from IBKR (stocks, ETFs, futures)
-  - Computes **gross portfolio weights** from live position values
-  - No reliance on static `portfolio.csv`
-
-- **Robust historical price retrieval**
-  - Pulls daily historical prices using:
-    - IBKR (with chunking to avoid API limits)
-    - Yahoo Finance (`yfinance`) as a fallback / alternative data source
-  - Gracefully handles limited history and asset inception dates
-
-- **Scenario-based stress testing**
-  - Evaluates portfolio performance across predefined historical crises
-  - Avoids look-ahead bias by using the nearest available trading date ≤ scenario bounds
-
-- **Asset-level contribution analysis**
-  - Separates pure asset returns from portfolio impact
-  - Identifies which assets drive losses or gains in each scenario
+> *"How would my current portfolio have performed during past crises?"*
 
 ---
 
-## Project Structure
-- code + results.ipynb # Main notebook: data pull, stress tests, results
-- output_prices # Saved historical price series (CSV per asset)
-- scenarios.csv # Stress scenario definitions (dates + labels)
+## What This Does
 
-
-> **Note:** `portfolio.csv` has been intentionally removed.  
-> Portfolio weights are now derived entirely from IBKR positions.
-
----
-
-## Methodology
-
-### 1. Portfolio Construction
-- Open positions are retrieved from IBKR using `ib_insync`
-- Each position’s **signed market value** is computed:
-position_value = quantity × price × multiplier
-- **Gross weights** are calculated as:
-weight = position_value / sum(|position_value|)
-- Positions without valid prices are excluded from analysis
+1. Connects to **Interactive Brokers (TWS / IB Gateway)**
+2. Pulls live portfolio positions
+3. Computes derived portfolio weights (gross or net)
+4. Applies historical crisis shock returns
+5. Ranks worst-case portfolio outcomes
+6. Provides asset-level contribution breakdown
 
 ---
 
-### 2. Historical Price Data
-- Daily price history is pulled for each asset:
-- Chunked requests (1 year per request) to avoid IBKR limits
-- Missing or unavailable history (e.g. pre-IPO periods) is handled gracefully
-- Assets are saved individually under `output_prices/`
+## Stress Scenarios Included
+
+Examples:
+
+- Global Financial Crisis (GFC)
+- Euro Debt Crisis
+- Taper Tantrum
+- Brexit
+- Flash Crash
+- Volmageddon
+- COVID-19 crash
+- Rating Downgrades
+- Carry Trade Unwind
+
+(Filtered to post-2007 by default.)
 
 ---
 
-### 3. Stress Scenarios
-Each scenario specifies:
-- A historical event (e.g. `covid19`, `dot_com`, `gfc`)
-- A start and end date defining the stress window
+## Weight Modes
 
-Asset returns are computed as:
-(Price at end of scenario / Price at start of scenario) − 1
+### **Gross Weight**
 
-The nearest trading day ≤ each date is used to avoid look-ahead bias.
+- weight_i = position_value_i / Σ |position_value|
+- Measures total exposure regardless of direction.
 
----
+### **Net Weight**
 
-### 4. Portfolio Impact
-- **Asset return**: price movement over the scenario window
-- **Contribution**:
-contribution = weight × asset_return
-
-- Portfolio-level stress return is the sum of contributions across assets
+- weight_i = position_value_i / Σ position_value
+- Reflects directional capital allocation.
 
 ---
 
-## Interpreting Results
-- Negative portfolio returns indicate stress vulnerability
-- Scenario severity is ranked by portfolio return
-- Asset-level contributions identify **which exposures drive risk**
-- In this portfolio, downside risk is largely driven by **equity beta**, particularly S&P 500 futures exposure
+## Important: IBKR API Requirement
+
+This dashboard **cannot connect to IBKR from the public Streamlit link.**
+
+IBKR API only allows connections from:
+localhost (127.0.0.1)
+
+Therefore:
+
+To pull live IBKR positions, the app **must run locally** on the same machine as:
+
+- TWS
+- OR IB Gateway
 
 ---
 
-## Known Limitations
-- Historical coverage varies by asset and exchange
-- Some futures contracts only provide history for the active contract month
-- Yahoo Finance coverage for non-US assets (e.g. SGX) may be incomplete
+# How To Run Locally
 
-These limitations are handled explicitly and do not invalidate the stress-testing framework.
+## 1. Clone Repository
 
----
+```bash
+git clone https://github.com/qiaoenn/stress-testing.git
+cd stress-testing
+```
+## 2. Install Dependencies
 
-## Future Extensions
-- Net-weight and capital-based stress testing
-- Factor-level decomposition (equity beta, rates, FX)
-- Automated scenario expansion and visualization dashboards
-- Rolling stress tests using current portfolio snapshots
+```bash
+pip install -r requirements.txt
+```
 
----
+## 3. Enable IBKR API
 
-## Disclaimer
-This project is for **educational and research purposes only** and does not constitute investment advice.
+Open TWS or IB Gateway
+Go to: Settings → API → Enable ActiveX and Socket Clients
+Ensure:
+Port = 7497 (Paper) or 7496 (Live) + Allow connections from localhost
+
+## 4. Run the dashboard 
+
+```bash
+streamlit run app.py
+```
+
+## Limitations
+- IBKR API requires local execution
+- Market value fallback uses avgCost × quantity if marketValue unavailable
+- Scenario set limited to available shock matrix
+- No transaction cost modeling
+
+
+
