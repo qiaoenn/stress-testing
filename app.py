@@ -126,7 +126,7 @@ def fetch_positions_with_weights(ib: IB, mode: str = "gross") -> pd.DataFrame:
     if denom == 0:
         df["weight"] = np.nan
     else:
-        df["weight"] = round(((df["position_value"] / denom) * 100), 2)
+        df["weight"] = df["position_value"] / denom
 
     df = df.sort_values("weight", key=lambda s: s.abs(), ascending=False)
     return df
@@ -209,29 +209,50 @@ if shock_sub.empty:
 
 # Portfolio returns per scenario
 portfolio_returns = shock_sub.fillna(0).dot(w)
-results = (portfolio_returns.rename("portfolio_return")
-           .reset_index()
-           .rename(columns={"index": "scenario"})
-           .sort_values("portfolio_return"))
 
-results_show = results.copy()
-results_show["portfolio_return (%)"] = (results_show["portfolio_return"] * 100).round(2)
-results_show = results_show.drop(columns=["portfolio_return"])
-results_show = results_show.reset_index(drop=True)
-
+results = (
+    portfolio_returns.rename("portfolio_return")
+    .reset_index()
+    .rename(columns={"index": "scenario"})
+    .sort_values("portfolio_return")
+)
 
 # Join scenario dates for readability
 scenarios_small = scenarios[["scenario", "start_date", "end_date"]].copy()
 results = results.merge(scenarios_small, on="scenario", how="left")
 
+# Build display table (2dp)
+results_show = results.copy()
+results_show["portfolio_return (%)"] = (results_show["portfolio_return"] * 100)
+
+# drop raw decimal return
+results_show = results_show.drop(columns=["portfolio_return"])
+
+# reset clean index
+results_show = results_show.reset_index(drop=True)
+
+# FORCE 2dp display for st.table (convert to formatted strings)
+results_show["portfolio_return (%)"] = results_show["portfolio_return (%)"].map(
+    lambda x: f"{x:.2f}" if pd.notna(x) else ""
+)
+
 st.subheader("Worst Tail Scenarios")
 st.table(results_show)
 
 # Worst N
-n = st.slider("Show worst N scenarios", 3, 20, 10)
+max_available = min(15, len(results_show))
+
+n = st.slider(
+    "Show worst N scenarios",
+    min_value=1,
+    max_value=max_available,
+    value=min(10, max_available)
+)
+
 worst_show = results_show.head(n).reset_index(drop=True)
 st.subheader(f"Worst {n} scenarios")
 st.dataframe(worst_show, use_container_width=True)
+
 
 # Contribution breakdown
 scenario_choice = st.selectbox(
